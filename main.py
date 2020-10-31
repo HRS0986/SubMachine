@@ -102,19 +102,42 @@ class SubMagic:
         new_ssa.write("ScriptType: v4.00\n")
         new_ssa.write("Collisions: Normal\n")
         new_ssa.write("PlayDepth: 0\n\n")
-        new_ssa.write("[V4 Styles]\n")   
+        new_ssa.write("[V4 Styles]\n")
         new_ssa.write("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, TertiaryColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, AlphaLevel, Encoding\n")
         new_ssa.write("Style: Default,Tahoma,18,16777215,65535,65535,-2147483640,-1,0,1,3,0,2,30,30,30,0,0\n\n")
         new_ssa.write("[Events]\n")
         new_ssa.write("Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+        print("[!] SSA FILE INITIALIZED")
 
-        part1 = "Dialogue: Marked=0,"
-        time1 = ""
-        time2 = ""
-        part2 = ",Default,NTP,0000,0000,0000,!Effect,"
-        dialogue = ""
+        for time, dialogue in zip(self.__timelinesSSA, self.__dialoguesSRT):
+            part1 = "Dialogue: Marked=0,"
+            part2 = ",Default,NTP,0000,0000,0000,!Effect,"
+            dialogue = ' '.join(dialogue.split('\n'))
+            subtitle = f'{part1}{time}{part2}{dialogue}\n'
+            new_ssa.write(subtitle)
 
-    
+        new_ssa.close()
+        print("[!] DONE")
+
+    # split each timeline into hours, minutes, seconds
+    def __split_srt_timeline_parts(self, timeline:str) -> tuple:
+        
+        splitted_time = self.__timelineRegex.findall(timeline)
+
+        seconds1 = float('.'.join((splitted_time[0][2],splitted_time[0][3])))
+        seconds2 = float('.'.join((splitted_time[0][-2],splitted_time[0][-1])))
+
+        minutes1 = int(splitted_time[0][1])
+        minutes2 = int(splitted_time[0][-3])
+
+        hours1 = int(splitted_time[0][0])
+        hours2 = int(splitted_time[0][-4])
+
+        splitted = (seconds1, minutes1, hours1, seconds2, minutes2, hours2)
+
+        return splitted
+
+
     def adjust_time(self, gap:str, fwd=True):        
         self.__splitt_SRT()
         self.__extract_timeline_SRT()
@@ -131,25 +154,36 @@ class SubMagic:
             mins = -mins
             sec = -sec
 
+        first_content = True
+
         # loop through the timeline
         for timeline in self.__timelinesSRT:
-            # split each timeline into hours, minutes, seconds
-            splitted_time = self.__timelineRegex.findall(timeline)
+            splitted = self.__split_srt_timeline_parts(timeline)
 
-            seconds1 = float('.'.join((splitted_time[0][2],splitted_time[0][3])))
-            seconds2 = float('.'.join((splitted_time[0][-2],splitted_time[0][-1])))
+            # timeline starting parts
+            seconds1 = splitted[0]
+            minutes1 = splitted[1]
+            hours1 = splitted[2]
 
-            minutes1 = int(splitted_time[0][1])
-            minutes2 = int(splitted_time[0][-3])
+            # timeline ending parts
+            seconds2 = splitted[3]
+            minutes2 = splitted[4]
+            hours2 = splitted[5]
 
-            hours1 = int(splitted_time[0][0])
-            hours2 = int(splitted_time[0][-4])
+            if first_content:
+                first_sec1 = seconds1
+                first_sec2 = seconds2
+                first_min1 = minutes1
+                first_min2 = minutes2
+                first_hours1 = hours1
+                first_hours2 = hours2
 
             # add seconds
-            seconds1 += sec
-            seconds2 += sec 
+            seconds1 += sec            
+            # add minutes
+            minutes1 += mins
 
-            # checking seconds range
+            # checking starting seconds range
             if seconds1 > 59.999:
                 seconds1 = 00.000
                 minutes1 += 1
@@ -157,18 +191,7 @@ class SubMagic:
                 seconds1 += 60
                 minutes1 -= 1
 
-            if seconds2 > 59.999:
-                seconds2 = 00.000
-                minutes2 += 1
-            elif seconds2 < 0:
-                seconds2 += 60
-                minutes2 -= 1
-
-            # add minutes
-            minutes1 += mins
-            minutes2 += mins
-
-            # checking minutes range
+            # checking starting minutes range
             if minutes1 > 59:
                 minutes1 = 00
                 hours1 += 1
@@ -176,16 +199,31 @@ class SubMagic:
                 minutes1 += 60
                 hours1 -= 1
 
-            # !!!! BUG HERE !!!! --> time goes to minus values
-            if hours1 < 0:
+            # checking if the timeline goes to minus values
+            if hours1 < 0 and first_content:
                 seconds1, minutes1, hours1 = 00.000, 00, 00
+                mins = -first_min1
+                sec = -first_sec1
 
+            seconds2 += sec
+            minutes2 += mins
+
+            # checking ending seconds range
+            if seconds2 > 59.999:
+                seconds2 = 00.000
+                minutes2 += 1
+            elif seconds2 < 0:
+                seconds2 += 60
+                minutes2 -= 1
+
+            # checking ending minutes range
             if minutes2 > 59:
                 minutes2 = 00
                 hours2 += 1
             elif minutes2 < 0:
                 minutes2 += 60
                 hours2 -= 1
+
 
             # rearrange seconds to suitable string format
             seconds1 = f'{seconds1:06.3f}'
@@ -199,6 +237,8 @@ class SubMagic:
             # add adjusted timeline into new_timeline list
             new_timelines.append(adjusted_timeline)
 
+            first_content = False
+
         self.__write_to_srt(new_timelines)
              
     # convert srt file to ssa file
@@ -207,7 +247,29 @@ class SubMagic:
         self.__extract_timeline_SRT()
         self.__extract_dialogues_SRT()
 
+        for timeline in self.__timelinesSRT:
+            splitted = self.__split_srt_timeline_parts(timeline)
+
+            # timeline starting parts
+            seconds1 = splitted[0]
+            ssa_seconds1 = f'{seconds1:05.2f}'
+            minutes1 = splitted[1]
+            ssa_minutes1 = f'{minutes1:0>2}'
+            hours1 = splitted[2]
+            ssa_start = f'{hours1}:{ssa_minutes1}:{ssa_seconds1}'
+
+            # timeline ending parts
+            seconds2 = splitted[3]
+            ssa_seconds2 = f'{seconds2:05.2f}'
+            minutes2 = splitted[4]
+            ssa_minutes2 = f'{minutes2:0>2}'
+            hours2 = splitted[5]
+            ssa_end = f'{hours2}:{ssa_minutes2}:{ssa_seconds2}'
+
+            ssa_timeline = f'{ssa_start},{ssa_end}'
+            self.__timelinesSSA.append(ssa_timeline)
         
+        print("[!] TIMELINE REARRANGED")
 
         self.__write_to_ssa()
         
@@ -222,7 +284,7 @@ class SubMagic:
                 content = sub.read()
             return SubMagic(subPath)
  
-        except Exception as e:     # !!!! BUG HERE !!!! --> Should raise an Exception
+        except Exception as e:
             print(f'Error - {e}\n')
             return False
 
@@ -280,7 +342,14 @@ if __name__ == "__main__":
                     os.system('PAUSE')
                     print()
                     continue
-    
+
+        elif ui == '2':
+            if subPath[-3:] != 'srt':
+                print('[!] This file is not a srt file. Cannot convert to ssa.')
+                os.system("PAUSE")
+                exit()
+            else:
+                magic.srt2ssa()
     except Exception as e:
         print(e)
         
