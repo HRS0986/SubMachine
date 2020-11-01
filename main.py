@@ -21,16 +21,34 @@ class SubMagic:
         with open(subPath, 'r+', encoding='utf8') as sub:
             content = sub.read()
         
-        self.__content = content    # For store srt file's content
+        self.__content = content    # For store subtitle file's content
         self.__timelinesSRT = []    # For store srt file's extracted timeline
         self.__timelinesSSA = []    # For store ssa file's extracted timeline
         self.__dialoguesSRT = []    # For store srt file's extracted dialogues
         self.__dialoguesSSA = []    # For store ssa file's extracted dialogues
         self.__splittedSRT = []     # For store srt file's splitted contents
+        self.__splittedSSA = []     # For store ssa file's splitted contents
 
         self.__srtTimePattern = r'^(\d\d):(\d\d):(\d\d),(\d{3}) --> (\d\d):(\d\d):(\d\d),(\d{3})$'
         self.__timelineRegex = re.compile(self.__srtTimePattern)
 
+        self.__srtDialoguePattern1 = r'">(.+)</f'
+        self.__srtDialogueRegex1 = re.compile(self.__srtDialoguePattern1)
+
+        self.__srtDialoguePattern2 = r'">(.+)'
+        self.__srtDialogueRegex2 = re.compile(self.__srtDialoguePattern2)
+
+        self.__srtDialoguePattern3 = r'(.+)</f'
+        self.__srtDialogueRegex3 = re.compile(self.__srtDialoguePattern3)
+
+        self.__ssaContentPattern = r'\bDialogue: Marked=0,\d:\d\d:\d\d\.\d\d,\d:\d\d:\d\d\.\d\d,Default,NTP,0000,0000,0000,!Effect,.+\b'
+        self.__ssaContentRegex = re.compile(self.__ssaContentPattern)
+
+        self.__ssaTimelinePattern = r'(\d):(\d\d):(\d\d)\.(\d\d),(\d):(\d\d):(\d\d)\.(\d\d)'
+        self.__ssaTimelineRegex = re.compile(self.__ssaTimelinePattern)
+
+        self.__ssaDialoguePattern = r"(?<=!Effect,)(.+)"
+        self.__ssaDialogueRegex = re.compile(self.__ssaDialoguePattern)
         
 
     # Split srt file's content
@@ -57,35 +75,54 @@ class SubMagic:
         print('[!] TIMELINES EXTRACTED')
 
     
-    # Extract dialogues from SRT file
+    # Extract dialogues from SRT file    
     def __extract_dialogues_SRT(self):
         # loop through each splitted srt file's content
         for splitted_srt_content in self.__splittedSRT:
-            # split content into lines
-            dialogues = splitted_srt_content.split('\n')  
+            # split content into lines            
+            dialogues = splitted_srt_content.split('\n')
 
-            # insert dialogue into dialogues list
-            dialogue = '\n'.join(dialogues[2:])
+            # for store dialogue, extracted using regex
+            filtered_dialogues = []
+
+            # Exttracting and inserting dialogues to filtered_dialogues
+            for dialogue in dialogues:                
+                if self.__srtDialogueRegex1.search(dialogue):
+                    filtered = self.__srtDialogueRegex1.findall(dialogue)                    
+                    filtered_dialogues.append(filtered[0])
+                
+                elif self.__srtDialogueRegex2.search(dialogue):
+                    filtered = self.__srtDialogueRegex2.findall(dialogue)                    
+                    filtered_dialogues.append(filtered[0])
+                
+                elif self.__srtDialogueRegex3.search(dialogue):
+                    filtered = self.__srtDialogueRegex3.findall(dialogue)                    
+                    filtered_dialogues.append(filtered[0])
+
+                else:
+                    filtered_dialogues.append(dialogue)
+
+            print(filtered_dialogues[2:])
+            dialogue = '\n'.join(filtered_dialogues[2:])            
             self.__dialoguesSRT.append(dialogue)
         
         print('[!] DIALOGUES EXTRACTED')
 
 
-    def __write_to_srt(self, timeline):
+    def __write_to_srt(self, timeline:list, name:str, count:int):
         # number of dialogues in subtitle file
-        dialogues_count = len(self.__splittedSRT)
-
-        new_srt_name = f'{self.__subPath[:-4]}-Adjusted.srt'
-
+        dialogues_count = count
+        
         # new subtitle file for output
-        adjusted_sub = open(new_srt_name, 'w+', encoding='utf8')
+        adjusted_sub = open(name, 'w+', encoding='utf8')
                
         # writing into new adjusted subtitle file
         for x in range(1,dialogues_count+1):
-            # print(x)
+            print(x)
+            print(timeline[x-1])
+            print(self.__dialoguesSRT[x-1])
             content_format = f'{x}\n{timeline[x-1]}\n{self.__dialoguesSRT[x-1]}\n\n'
-            # print(timeline[x-1])
-            # print(self.__dialoguesSRT[x-1])
+           
             adjusted_sub.write(content_format)
 
         adjusted_sub.close()
@@ -94,8 +131,8 @@ class SubMagic:
         print('[!] DONE')
 
     
-    def __write_to_ssa(self):
-        new_ssa = open(f'{self.__subPath[:-4]}.ssa', 'w+', encoding='utf8')
+    def __write_to_ssa(self, name:str):
+        new_ssa = open(name, 'w+', encoding='utf8')
         new_ssa.write('[Script Info]\n')
         new_ssa.write("; This is a Sub Station Alpha v4 script.\n")
         new_ssa.write(f"Title: {self.__subPath[:-4]}\n")
@@ -136,6 +173,36 @@ class SubMagic:
         splitted = (seconds1, minutes1, hours1, seconds2, minutes2, hours2)
 
         return splitted
+
+
+    # Split ssa file's content
+    def __split_SSA(self):
+        self.__splittedSSA = self.__content.split('\n')
+        
+        for x in self.__splittedSSA:
+            if not x:
+                self.__splittedSSA.remove(x)
+        print(self.__splittedSSA[0])
+                
+        print('[!] SPLITTED SSA FILE')
+        
+
+    def __extract_timeline_SSA(self):
+        for timeline in self.__splittedSSA:
+            is_matched = self.__ssaTimelineRegex.search(timeline)
+            if is_matched:
+                temp = self.__ssaTimelineRegex.findall(timeline)                
+                self.__timelinesSSA.append(temp[0])                
+        print('[!] TIMELINE SPLITTED')        
+
+
+    def __extract_dialogues_SSA(self):
+        for dialogue in self.__splittedSSA:
+            is_matched = self.__ssaDialogueRegex.search(dialogue)
+            if is_matched:
+                temp = self.__ssaDialogueRegex.findall(dialogue)
+                self.__dialoguesSSA.append(temp[0])                
+        print('[!] DIALOGUES SPLITTED')
 
 
     def adjust_time(self, gap:str, fwd=True):        
@@ -238,8 +305,9 @@ class SubMagic:
             new_timelines.append(adjusted_timeline)
 
             first_content = False
-
-        self.__write_to_srt(new_timelines)
+        new_srt_name = f'{self.__subPath[:-4]}-Adjusted.srt'
+        dialodues_count = len(self.__splittedSRT)
+        self.__write_to_srt(new_timelines, new_srt_name, dialodues_count)
              
     # convert srt file to ssa file
     def srt2ssa(self):
@@ -270,12 +338,39 @@ class SubMagic:
             self.__timelinesSSA.append(ssa_timeline)
         
         print("[!] TIMELINE REARRANGED")
-
-        self.__write_to_ssa()
         
-
+        ssa_name = f'{self.__subPath[:-4]}-Convereted.ssa'
+        self.__write_to_ssa(ssa_name)
+        
+    # Convert SSA file to SRT
     def ssa2srt(self):
-        pass
+        self.__split_SSA()
+        self.__extract_dialogues_SSA()
+        self.__extract_timeline_SSA()
+
+        # Rearrange the timeline
+        for timeline in self.__timelinesSSA:
+            start = timeline[:4]            
+            s_h, s_m = start[0], start[1]             
+            s_s, s_ms = start[2], start[3]
+            
+            end = timeline[4:]            
+            e_h, e_m = end[0], end[1]
+            e_s, e_ms = end[2], end[3]           
+
+            srt_start = f'{s_h:0>2}:{s_m}:{s_s},{s_ms:0<3}'
+            srt_end = f'{e_h:0>2}:{e_m}:{e_s},{e_ms:0<3}'
+            srt_timeline = f'{srt_start} --> {srt_end}'
+            self.__timelinesSRT.append(srt_timeline)
+
+        print("[!] TIMELINE REARRANGED")
+
+        self.__dialoguesSRT = self.__dialoguesSSA
+
+        srt_name = f'{self.__subPath[:-4]}-Convereted.srt'
+        dialogues_count = len(self.__timelinesSRT)
+        self.__write_to_srt(self.__timelinesSRT, srt_name, dialogues_count)
+
 
     @staticmethod
     def initialize(subPath):
@@ -350,6 +445,9 @@ if __name__ == "__main__":
                 exit()
             else:
                 magic.srt2ssa()
+        
+        elif ui == '3':
+            magic.ssa2srt()
     except Exception as e:
         print(e)
         
