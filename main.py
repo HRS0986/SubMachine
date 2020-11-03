@@ -5,6 +5,7 @@
 
 import re
 import os
+from art import tprint
 from exceptions import SubtitlePathError
 
 
@@ -205,10 +206,21 @@ class SubMagic:
         print('[!] DIALOGUES SPLITTED')
 
 
-    def adjust_time(self, gap:str, fwd=True):        
-        self.__splitt_SRT()
-        self.__extract_timeline_SRT()
-        self.__extract_dialogues_SRT()
+    def adjust_time(self, gap:str, fwd=True):
+        sub_type = self.__subPath[-3:]        
+        if sub_type == 'srt':
+            self.__splitt_SRT()
+            self.__extract_timeline_SRT()
+            self.__extract_dialogues_SRT()
+            new_srt_name = f'{self.__subPath[:-4]}-Adjusted.srt'
+
+        else:
+            self.__split_SSA()
+            self.__extract_dialogues_SSA()
+            self.__extract_timeline_SSA()        
+            self.__ssa_timeline_to_srt()        
+            self.__dialoguesSRT = self.__dialoguesSSA
+            new_srt_name = f'{self.__subPath[:-4]}-Adjusted.ssa'
 
         # for store new timelines
         new_timelines = []        
@@ -304,9 +316,8 @@ class SubMagic:
             # add adjusted timeline into new_timeline list
             new_timelines.append(adjusted_timeline)
 
-            first_content = False
-        new_srt_name = f'{self.__subPath[:-4]}-Adjusted.srt'
-        dialodues_count = len(self.__splittedSRT)
+            first_content = False        
+        dialodues_count = len(self.__dialoguesSRT)
         self.__write_to_srt(new_timelines, new_srt_name, dialodues_count)
              
     # convert srt file to ssa file
@@ -341,22 +352,18 @@ class SubMagic:
         
         ssa_name = f'{self.__subPath[:-4]}-Convereted.ssa'
         self.__write_to_ssa(ssa_name)
-        
-    # Convert SSA file to SRT
-    def ssa2srt(self):
-        self.__split_SSA()
-        self.__extract_dialogues_SSA()
-        self.__extract_timeline_SSA()
 
+    
+    def __ssa_timeline_to_srt(self):
         # Rearrange the timeline
         for timeline in self.__timelinesSSA:
             start = timeline[:4]            
             s_h, s_m = start[0], start[1]             
             s_s, s_ms = start[2], start[3]
             
-            end = timeline[4:]            
+            end = timeline[4:]
             e_h, e_m = end[0], end[1]
-            e_s, e_ms = end[2], end[3]           
+            e_s, e_ms = end[2], end[3]
 
             srt_start = f'{s_h:0>2}:{s_m}:{s_s},{s_ms:0<3}'
             srt_end = f'{e_h:0>2}:{e_m}:{e_s},{e_ms:0<3}'
@@ -365,6 +372,13 @@ class SubMagic:
 
         print("[!] TIMELINE REARRANGED")
 
+        
+    # Convert SSA file to SRT
+    def ssa2srt(self):
+        self.__split_SSA()
+        self.__extract_dialogues_SSA()
+        self.__extract_timeline_SSA()        
+        self.__ssa_timeline_to_srt()        
         self.__dialoguesSRT = self.__dialoguesSSA
 
         srt_name = f'{self.__subPath[:-4]}-Convereted.srt'
@@ -374,20 +388,21 @@ class SubMagic:
 
     @staticmethod
     def initialize(subPath):
-        try:
-            with open(subPath, 'r+', encoding='utf8') as sub:
-                content = sub.read()
-            return SubMagic(subPath)
- 
-        except Exception as e:
-            print(f'Error - {e}\n')
+        if subPath[-3:] in ('srt','ssa'):
+            try:
+                with open(subPath, 'r+', encoding='utf8') as sub:
+                    content = sub.read()
+                return SubMagic(subPath)
+    
+            except Exception as e:
+                print(f'Error - {e}\n')
+                return False
+        else:
             return False
 
 
 if __name__ == "__main__":
-    from art import tprint
-
-    
+        
     tprint("SubMagic")
     print()
 
