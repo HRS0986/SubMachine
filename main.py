@@ -5,7 +5,11 @@
 
 import re
 import os
-from art import tprint
+
+try:
+    from art import tprint
+except:
+    os.system('PIP INSTALL ART')
 
 
 # Regex for timeline input validation
@@ -396,7 +400,7 @@ class SubMagic:
     def initialize(subPath):
         if subPath[-3:] in ('srt','ssa'):
             try:
-                with open(subPath, 'r+', encoding='utf8' errors='ignore') as sub:
+                with open(subPath, 'r+', encoding='utf8', errors='ignore') as sub:
                     content = sub.read()
                 return SubMagic(subPath)
 
